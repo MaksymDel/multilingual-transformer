@@ -34,14 +34,10 @@ from fairseq.sequence_generator import SequenceGenerator
 from transformer.common.fairseq_wrapping_util import Args, Dictionary
 
 
-@Model.register("fairseq_transformer")
-class FairseqTransformer(Model):
+
+@Model.register("multilingual_transformer_fseq")
+class MultilingualTransformerFseq(Model):
     """
-    This ``SimpleSeq2Seq`` class is a :class:`Model` which takes a sequence, encodes it, and then
-    uses the encoded representations to decode another sequence.  You can use this as the basis for
-    a neural machine translation system, an abstractive summarization system, or any other common
-    seq2seq problem.  The model here is simple, but should be a decent starting place for
-    implementing recent models for these tasks.
 
     Parameters
     ----------
@@ -49,32 +45,30 @@ class FairseqTransformer(Model):
         Vocabulary containing source and target vocabularies. They may be under the same namespace
         (`tokens`) or the target tokens can have a different namespace, in which case it needs to
         be specified as `target_namespace`.
-     : ``str``, Predefined transformer architecture name
+    architecture: ``str``, Predefined transformer architecture name
         Options: "transformer_iwslt_de_en" (default) / "transformer_wmt_en_de"
 
     """
 
     def __init__(self,
                  vocab: Vocabulary,
-                 source_namespace: str,
-                 target_namespace: str,
                  architecture: str = "transformer_iwslt_de_en",
                  use_bleu = True
                  ) -> None:
-        super(FairseqTransformer, self).__init__(vocab)
-        self._source_namespace = source_namespace
-        self._target_namespace = target_namespace
+        super(MultilingualTransformerFseq, self).__init__(vocab)
+        self._source_namespace = "vocab_A"
+        self._target_namespace = "vocab_B"
 
 
         # We need the start symbol to provide as the input at the first timestep of decoding, and
         # end symbol as a way to indicate the end of the decoded sequence.
         self._end_index = self.vocab.get_token_index(END_SYMBOL, namespace=self._target_namespace)
 
-        self._src_dict = Dictionary(vocab, source_namespace,
+        self._src_dict = Dictionary(vocab, self._source_namespace,
                                     eos=END_SYMBOL,
                                     pad=vocab._padding_token,
                                     unk=vocab._oov_token)
-        self._tgt_dict = Dictionary(vocab, target_namespace,
+        self._tgt_dict = Dictionary(vocab, self._target_namespace,
                                     eos=END_SYMBOL,
                                     pad=vocab._padding_token,
                                     unk=vocab._oov_token)
@@ -89,7 +83,8 @@ class FairseqTransformer(Model):
         args = Args()
         apply_architecture(args)
 
-        self._fairseq_transformer_model = self._build_fairseq_transformer_model(args)
+        self._encoder, self._decoder = self._build_encoder_and_decoder(args)
+        self._fairseq_transformer_model = TransformerModel(self._encoder, self._decoder)
 
         self._translator = SequenceGenerator([self._fairseq_transformer_model], self._tgt_dict, beam_size=7,
                                              stop_early=True, maxlen=200)
@@ -103,24 +98,18 @@ class FairseqTransformer(Model):
 
     @overrides
     def forward(self,  # type: ignore
-                source_tokens: Dict[str, torch.LongTensor],
-                targets_for_teacher_forcing: Dict[str, torch.LongTensor] = None,
-                targets_for_loss_computation: Dict[str, torch.LongTensor] = None) -> Dict[str, torch.Tensor]:
+                tokens_A: Dict[str, torch.LongTensor] = None,
+                tokens_B: Dict[str, torch.LongTensor] = None) -> Dict[str, torch.Tensor]:
         # pylint: disable=arguments-differ
         """
         Make foward pass with decoder logic for producing the entire target sequence.
 
         Parameters
         ----------
-        source_tokens : ``Dict[str, torch.LongTensor]``
+        tokens_A : ``Dict[str, torch.LongTensor]``
            The output of `TextField.as_array()` applied on the source `TextField`. This will be
            passed through a `TextFieldEmbedder` and then through an encoder.
-        targets_for_teacher_forcing : ``Dict[str, torch.LongTensor]``, optional (default = None)
-           Output of `Textfield.as_array()` applied on target `TextField`. We assume that the
-           target tokens are also represented as a `TextField`. It is sequence that will be used as an input for
-           teacher forcing.
-           The format is following: EOS W1 W2 ... Wn
-        targets_for_loss_computation :  ````Dict[str, torch.LongTensor]``, optional (default = None)
+        tokens_B:  ````Dict[str, torch.LongTensor]``, optional (default = None)
            Output of `Textfield.as_array()` applied on target `TextField`. We assume that the
            target tokens are also represented as a `TextField`. It is sequence that we want to teach our model to
            produce.
@@ -130,31 +119,34 @@ class FairseqTransformer(Model):
         -------
         Dict[str, torch.Tensor]
         """
+
+
         # fetch source padding mask
-        source_padding_mask = util.get_text_field_mask(source_tokens)
-        source_lengths = util.get_lengths_from_binary_sequence_mask(source_padding_mask)
+        padding_mask_A = util.get_text_field_mask(tokens_A)
+        lengths_A = util.get_lengths_from_binary_sequence_mask(padding_mask_A)
 
         # unpack inputs
-        source_tokens = source_tokens["tokens"]
-        if targets_for_loss_computation is not None:
-            targets_for_loss_computation = targets_for_loss_computation["tokens"]
-            targets_for_teacher_forcing = targets_for_teacher_forcing["tokens"]
+        tokens_A = tokens_A["tokens"]
+        if tokens_B is not None:
+            padding_mask_B = util.get_text_field_mask(tokens_B)
+            tokens_B = tokens_B["tokens"]
+            tokens_B_shifted = move_eos_to_the_beginning(tokens_B, padding_mask_B)
 
-        if targets_for_loss_computation is not None:
-            model_input = (source_tokens, source_lengths, targets_for_teacher_forcing)
+        if tokens_B is not None:
+            model_input = (tokens_A, lengths_A, tokens_B_shifted)
             net_output = self._fairseq_transformer_model(*model_input)
             lprobs = self._fairseq_transformer_model.get_normalized_probs(net_output, log_probs=True)
             lprobs_reshaped = lprobs.view(-1, lprobs.size(-1))
-            loss = F.nll_loss(lprobs_reshaped, targets_for_loss_computation.view(-1),
+            loss = F.nll_loss(lprobs_reshaped, tokens_B.view(-1),
                               size_average=False,
                               ignore_index=self._tgt_dict.pad(),
                               reduce=True)
             predictions = lprobs.argmax(2)
             output_dict = {"loss": loss, "predictions": predictions}
-            self.bleu(predictions, targets_for_loss_computation)
+            self.bleu(predictions, tokens_B)
 
         else:
-            encoder_input = {"src_tokens": source_tokens, "src_lengths": source_lengths}
+            encoder_input = {"src_tokens": tokens_A, "src_lengths": lengths_A}
             list_of_dicts = self._translator.generate(encoder_input)
             best_predictions = [d[0]["tokens"].detach().cpu().numpy() for d in list_of_dicts]
             output_dict = {"predictions": best_predictions}
@@ -195,7 +187,7 @@ class FairseqTransformer(Model):
         output_dict["predicted_tokens"] = all_predicted_tokens
         return output_dict
 
-    def _build_fairseq_transformer_model(self, args) -> TransformerModel:
+    def _build_encoder_and_decoder(self, args) -> Tuple[TransformerEncoder, TransformerDecoder]:
         """Build a new model instance."""
 
         # make sure all arguments are present in older models
@@ -245,7 +237,7 @@ class FairseqTransformer(Model):
 
         encoder = TransformerEncoder(args, src_dict, encoder_embed_tokens, left_pad=False)
         decoder = TransformerDecoder(args, tgt_dict, decoder_embed_tokens, left_pad=False)
-        return TransformerModel(encoder, decoder)
+        return encoder, decoder
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
@@ -253,3 +245,31 @@ class FairseqTransformer(Model):
         if self.bleu:
             all_metrics.update(self.bleu.get_metric(reset=reset))
         return all_metrics
+
+
+def move_eos_to_the_beginning(tensor: torch.Tensor,
+                              mask: torch.Tensor) -> torch.Tensor:
+    """
+    Mask stays the same
+    """
+    sequence_lengths = mask.sum(dim=1).detach().cpu().numpy()
+    tensor_shape = list(tensor.data.shape)
+    new_shape = list(tensor_shape)
+
+    contextualized = False
+    if len(new_shape) == 3:
+        contextualized = True
+
+    tensor_with_eos_at_the_beginning = tensor.new_zeros(*new_shape)
+    if contextualized:
+        for i, j in enumerate(sequence_lengths):
+            if j > 1:
+                tensor_with_eos_at_the_beginning[i, 0, :] = tensor[i, (j - 1), :]
+                tensor_with_eos_at_the_beginning[i, 1:j, :] = tensor[i, :(j - 1), :]
+    else:
+        for i, j in enumerate(sequence_lengths):
+            if j > 1:
+                tensor_with_eos_at_the_beginning[i, 0] = tensor[i, (j - 1)]
+                tensor_with_eos_at_the_beginning[i, 1:j] = tensor[i, :(j - 1)]
+
+    return tensor_with_eos_at_the_beginning
