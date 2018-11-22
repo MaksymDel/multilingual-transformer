@@ -15,7 +15,7 @@ class Seq2SeqPredictor(Predictor):
         If you don't want your outputs in JSON-lines format
         you can override this function to output them differently.
         """
-        return json.dumps(" ".join(outputs["predicted_tokens"])).replace(" @@", "")[1:-1]  + "\n"  # here we remove first and last symbols which are quotes
+        return json.dumps(" ".join(outputs["predicted_tokens"])).replace("@@ ", "")[1:-1]  + "\n"  # here we remove first and last symbols which are quotes
         # return json.dumps(" ".join(outputs["predicted_tokens"])).replace(" @@", "")  + "\n"  # here we remove first and last symbols which are quotes
 
     @overrides

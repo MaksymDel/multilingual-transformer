@@ -70,13 +70,15 @@ class FairseqMtDatasetReader(DatasetReader):
                     continue
 
                 line_parts = line.split('\t')
-                if len(line_parts) != 2 and len(line_parts) != 1:
-                    raise ConfigurationError("Invalid line format: %s (line number %d)" % (line, line_num + 1))
+
                 if len(line_parts) == 2:
                     source_sequence, target_sequence = line_parts
                     yield self.text_to_instance(source_sequence, target_sequence)
+                elif len(line_parts) == 1:
+                    source_sequence = line_parts[0]
+                    yield self.text_to_instance(source_sequence)
                 else:
-                    yield self.text_to_instance(line)
+                    raise ConfigurationError("Invalid line format: %s (line number %d)" % (line, line_num + 1))
 
     @overrides
     def text_to_instance(self, source_string: str, target_string: str = None) -> Instance:  # type: ignore
@@ -96,7 +98,7 @@ class FairseqMtDatasetReader(DatasetReader):
             # this is in format W1 W2 ... Wn EOS
             targets_for_loss_computation = tokenized_target.copy()
             targets_for_loss_computation.append(Token(END_SYMBOL))
-            targets_for_loss_field = TextField(targets_for_loss_computation, {"token_ids": SingleIdTokenIndexer()})
+            targets_for_loss_field = TextField(targets_for_loss_computation, {"tokens": SingleIdTokenIndexer()})
 
             return Instance({"source_tokens": source_field,
                              "targets_for_teacher_forcing": targets_for_tf_field,

@@ -4,3 +4,4 @@ fairseq
 serialization
 __pycache__
 .pyc
+fixtures/fairseq_transformer/model.tar.gz

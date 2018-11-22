@@ -29,7 +29,7 @@ class TestSeq2SeqPredictor(AllenNlpTestCase):
         # assert isinstance(predicted_tokens, list)
         # assert all(isinstance(x, str) for x in predicted_tokens)
 
-    def test_real_model(self):
+    def test_on_single_instance(self):
         try:
             ar = load_archive("fixtures/fairseq_transformer/model.tar.gz")
             tr = ar.model
@@ -47,3 +47,11 @@ class TestSeq2SeqPredictor(AllenNlpTestCase):
             # tr.forward_on_instance(i)
         except FileNotFoundError:
             pass
+
+    def test_predict_no_labels(self):
+        ar = load_archive("fixtures/fairseq_transformer/serialization/model.tar.gz")
+        mdl = ar.model
+        reader = DatasetReader.from_params(ar.config.pop("dataset_reader"))
+        instances = reader.read("fixtures/data/seq2seq_nolabels.txt")
+        res = mdl.forward_on_instances(instances)
+        assert len(res) == len(instances)

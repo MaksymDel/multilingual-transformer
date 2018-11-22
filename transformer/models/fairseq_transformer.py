@@ -89,14 +89,12 @@ class FairseqTransformer(Model):
             raise ConfigurationError("Typo in architecture name")
 
         args = Args()
-        args.left_pad = False
-
         apply_architecture(args)
 
         self._fairseq_transformer_model = self._build_fairseq_transformer_model(args)
 
         self._translator = SequenceGenerator([self._fairseq_transformer_model], self._tgt_dict, beam_size=7,
-                                             stop_early=False, maxlen=100)
+                                             stop_early=True, maxlen=200)
 
         if use_bleu:
             pad_index = self.vocab.get_token_index(self.vocab._padding_token,
@@ -141,7 +139,7 @@ class FairseqTransformer(Model):
         # unpack inputs
         source_tokens = source_tokens["tokens"]
         if targets_for_loss_computation is not None:
-            targets_for_loss_computation = targets_for_loss_computation["token_ids"]
+            targets_for_loss_computation = targets_for_loss_computation["tokens"]
             targets_for_teacher_forcing = targets_for_teacher_forcing["tokens"]
 
         if targets_for_loss_computation is not None:
@@ -247,8 +245,8 @@ class FairseqTransformer(Model):
                 tgt_dict, args.decoder_embed_dim, args.decoder_embed_path
             )
 
-        encoder = TransformerEncoder(args, src_dict, encoder_embed_tokens, left_pad=args.left_pad)
-        decoder = TransformerDecoder(args, tgt_dict, decoder_embed_tokens, left_pad=args.left_pad)
+        encoder = TransformerEncoder(args, src_dict, encoder_embed_tokens, left_pad=False)
+        decoder = TransformerDecoder(args, tgt_dict, decoder_embed_tokens, left_pad=False)
         return TransformerModel(encoder, decoder)
 
     @overrides
