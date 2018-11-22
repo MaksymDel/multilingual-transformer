@@ -1,0 +1,82 @@
+{
+  "vocabulary": {
+    "max_vocab_size": {
+      "source_tokens": 14000,
+      "target_tokens": 14000
+    }
+  },
+  "dataset_reader": {
+    "type": "seq2seq",
+    "source_tokenizer": {
+      "type": "word",
+      "word_splitter": {
+        "type": "just_spaces"
+      }
+    },
+    "target_tokenizer": {
+      "type": "word"
+    },
+    "source_token_indexers": {
+      "tokens": {
+        "type": "single_id",
+        "namespace": "source_tokens"
+      }
+    },
+    "target_token_indexers": {
+      "tokens": {
+        "type": "single_id",
+        "namespace": "target_tokens"
+      }
+    }
+  },
+  "train_data_path": "../data/new/iwslt14.tokenized.de-en/train.de-en",
+  "validation_data_path": "../data/new/iwslt14.tokenized.de-en/valid.de-en",
+
+  "model": {
+    "type": "rnn_search",
+    "source_embedder": {
+      "token_embedders": {
+        "tokens": {
+          "type": "embedding",
+          "vocab_namespace": "source_tokens",
+          "embedding_dim": 500,
+          "trainable": true
+        }
+      }
+    },
+    "encoder": {
+      "type": "lstm",
+      "input_size": 500,
+      "hidden_size": 500,
+      "num_layers": 2,
+      "bidirectional": true,
+      "dropout": 0.1
+    },
+    "max_decoding_steps": 175,
+    "target_embedding_dim": 500,
+    "target_namespace": "target_tokens",
+    "attention": {
+      "type": "dot_product"
+    },
+    "label_smoothing_ratio": 0.1,
+    "beam_size": 6
+  },
+  "iterator": {
+    "type": "bucket",
+    "batch_size" : 128,
+    "sorting_keys": [["source_tokens", "num_tokens"]],
+    "biggest_batch_first": true
+  },
+  "trainer": {
+    "cuda_device": 0,
+    "num_epochs": 100,
+    "num_serialized_models_to_keep": 5,
+    "patience": 10,
+    "grad_norm": 5.0,
+    "validation_metric": "+BLEU",
+    "optimizer": {
+      "type": "adam",
+      "lr": 0.001
+    }
+  }
+}

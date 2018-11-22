@@ -1,0 +1,6 @@
+fairseq
+.pytest_cache
+.idea
+serialization
+__pycache__
+.pyc

@@ -1,0 +1,1 @@
+from transformer.predictors.seq2seq_predictor import Seq2SeqPredictor
