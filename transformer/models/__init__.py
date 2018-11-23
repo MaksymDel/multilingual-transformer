@@ -1,4 +1,2 @@
-from transformer.models.fairseq_transformer import FairseqTransformer
-from transformer.models.rnn_search import RnnSearch
-from transformer.models.transformer import Transformer
-from transformer.models.multilingaul_transformer_fseq import MultilingualTransformerFseq
+from transformer.models.bilingual_transformer import BilingualTransformer
+from transformer.models.multilingaul_transformer import MultilingualTransformer

@@ -16,8 +16,8 @@ from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@DatasetReader.register("multilingual_transformer_fseq")
-class MultilingualFseqDatasetReader(DatasetReader):
+@DatasetReader.register("bilingual")
+class BilingualDatasetReader(DatasetReader):
     """
     Read a tsv file containing paired sequences, and create a dataset suitable for a
     FairSeq models.
@@ -26,7 +26,7 @@ class MultilingualFseqDatasetReader(DatasetReader):
     sentences and rely on in-model utils to move EOS  to beginning for teacher forcing or to remove EOS in
     case of string being source sequence.
 
-    Expected format for each input line: <langA_sequence_string>\t<langB_sequence_string>\t...
+    Expected format for each input line: <langA_sequence_string>\t<langB_sequence_string>
 
     The output of ``read`` is a list of ``Instance`` s with the fields:
         source_tokens: ``TextField`` and

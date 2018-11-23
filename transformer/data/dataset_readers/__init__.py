@@ -1,3 +1,2 @@
-from transformer.data.dataset_readers.fairseq_mt_dataset_reader import FairseqMtDatasetReader
-from transformer.data.dataset_readers.bitext_dataset_reader import BitextDatasetReader
-from transformer.data.dataset_readers.multilingual_fseq_dataset_reader import MultilingualFseqDatasetReader
+from transformer.data.dataset_readers.bilingual_dataset_reader import BilingualDatasetReader
+from transformer.data.dataset_readers.multilingual_dataset_reader import MultilingualDatasetReader
