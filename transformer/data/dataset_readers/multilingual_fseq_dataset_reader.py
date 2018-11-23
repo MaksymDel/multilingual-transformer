@@ -83,7 +83,7 @@ class MultilingualFseqDatasetReader(DatasetReader):
     @staticmethod
     def string_to_field(string: str, tokenizer: Tokenizer, token_indexers: TokenIndexer, domain_tag: str):
         tokenized_string = tokenizer.tokenize(string)
-        tokenized_string.append(Token(END_SYMBOL))
+        tokenized_string.insert(0, Token(END_SYMBOL))
         field = TextField(tokenized_string, token_indexers)
         field_name = "tokens_" + domain_tag
         return {field_name: field}

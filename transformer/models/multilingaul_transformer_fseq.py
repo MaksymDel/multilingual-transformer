@@ -3,7 +3,6 @@ from typing import Dict, List, Tuple
 import numpy
 from overrides import overrides
 import torch
-import torch.nn.functional as F
 
 from allennlp.common.checks import ConfigurationError
 from allennlp.common.util import END_SYMBOL
@@ -12,27 +11,15 @@ from allennlp.data.vocabulary import Vocabulary
 from allennlp.models.model import Model
 from allennlp.training.metrics import BLEU
 
-# from fairseq.modules import (
-#     AdaptiveInput, AdaptiveSoftmax, CharacterTokenEmbedder, LearnedPositionalEmbedding, MultiheadAttention,
-#     SinusoidalPositionalEmbedding
-# )
-#
-# from fairseq.models import (
-#     FairseqIncrementalDecoder, FairseqEncoder, FairseqLanguageModel, FairseqModel, register_model,
-#     register_model_architecture
-# )
-
-from fairseq.models.transformer import (TransformerEncoder, TransformerEncoderLayer,
-                                        TransformerDecoder, TransformerDecoderLayer,
+from fairseq.sequence_generator import SequenceGenerator
+from fairseq.models.transformer import (TransformerEncoder,
+                                        TransformerDecoder,
                                         TransformerModel,
-                                        Embedding, LayerNorm, Linear, PositionalEmbedding,
+                                        Embedding,
                                         base_architecture, transformer_iwslt_de_en, transformer_wmt_en_de
                                         )
 
-from fairseq.sequence_generator import SequenceGenerator
-
 from transformer.common.fairseq_wrapping_util import Args, Dictionary
-
 
 
 @Model.register("multilingual_transformer_fseq")
@@ -53,15 +40,13 @@ class MultilingualTransformerFseq(Model):
     def __init__(self,
                  vocab: Vocabulary,
                  architecture: str = "transformer_iwslt_de_en",
-                 use_bleu = True
-                 ) -> None:
+                 use_bleu: bool = True) -> None:
         super(MultilingualTransformerFseq, self).__init__(vocab)
         self._source_namespace = "vocab_A"
         self._target_namespace = "vocab_B"
 
-
-        # We need the start symbol to provide as the input at the first timestep of decoding, and
-        # end symbol as a way to indicate the end of the decoded sequence.
+        # We need the end symbol to provide as the input at the first timestep of decoding, and
+        # the same end symbol as a way to indicate the end of the decoded sequence.
         self._end_index = self.vocab.get_token_index(END_SYMBOL, namespace=self._target_namespace)
 
         self._src_dict = Dictionary(vocab, self._source_namespace,
@@ -83,11 +68,11 @@ class MultilingualTransformerFseq(Model):
         args = Args()
         apply_architecture(args)
 
-        self._encoder, self._decoder = self._build_encoder_and_decoder(args)
-        self._fairseq_transformer_model = TransformerModel(self._encoder, self._decoder)
+        self._model_A2B = self._build_transformer(args)
 
-        self._translator = SequenceGenerator([self._fairseq_transformer_model], self._tgt_dict, beam_size=7,
-                                             stop_early=True, maxlen=200)
+        # we should have a translator per each language direction
+        self._translator_A2B = SequenceGenerator([self._model_A2B], self._tgt_dict, beam_size=7,
+                                                 stop_early=True, maxlen=200)
 
         if use_bleu:
             pad_index = self.vocab.get_token_index(self.vocab._padding_token,
@@ -119,39 +104,33 @@ class MultilingualTransformerFseq(Model):
         -------
         Dict[str, torch.Tensor]
         """
-
-
-        # fetch source padding mask
-        padding_mask_A = util.get_text_field_mask(tokens_A)
-        lengths_A = util.get_lengths_from_binary_sequence_mask(padding_mask_A)
-
-        # unpack inputs
-        tokens_A = tokens_A["tokens"]
-        if tokens_B is not None:
-            padding_mask_B = util.get_text_field_mask(tokens_B)
-            tokens_B = tokens_B["tokens"]
-            tokens_B_shifted = move_eos_to_the_beginning(tokens_B, padding_mask_B)
+        encoder_input = self._prepare_encoder_input(source_tokens=tokens_A)
+        encoder_output = self._model_A2B.encoder(**encoder_input)
 
         if tokens_B is not None:
-            model_input = (tokens_A, lengths_A, tokens_B_shifted)
-            net_output = self._fairseq_transformer_model(*model_input)
-            lprobs = self._fairseq_transformer_model.get_normalized_probs(net_output, log_probs=True)
-            lprobs_reshaped = lprobs.view(-1, lprobs.size(-1))
-            loss = F.nll_loss(lprobs_reshaped, tokens_B.view(-1),
-                              size_average=False,
-                              ignore_index=self._tgt_dict.pad(),
-                              reduce=True)
-            predictions = lprobs.argmax(2)
-            output_dict = {"loss": loss, "predictions": predictions}
-            self.bleu(predictions, tokens_B)
+            # Compute sequence logits
+            decoder_input = self._prepare_decoder_input(target_tokens=tokens_B, encoder_output=encoder_output)
+            logits, _ = self._model_A2B.decoder(**decoder_input)
+
+            # Targets: <EOS, w1, w2, w3, PAD, PAD>
+            # Desired: <w1, w2, w3, EOS, PAD, PAD>
+            target_mask = util.get_text_field_mask(tokens_B)
+            relevant_targets = move_eos_to_the_end(tokens_B["tokens"], target_mask).contiguous()
+
+            # Compute loss
+            loss = util.sequence_cross_entropy_with_logits(logits, relevant_targets, target_mask)
+
+            # Update metrics
+            predictions = logits.argmax(2)
+            self.bleu(predictions, relevant_targets)
+
+            return {"loss": loss, "predictions": predictions}
 
         else:
-            encoder_input = {"src_tokens": tokens_A, "src_lengths": lengths_A}
-            list_of_dicts = self._translator.generate(encoder_input)
+            list_of_dicts = self._translator_A2B.generate(encoder_input)
             best_predictions = [d[0]["tokens"].detach().cpu().numpy() for d in list_of_dicts]
-            output_dict = {"predictions": best_predictions}
 
-        return output_dict
+            return {"predictions": best_predictions}
 
     @overrides
     def decode(self, output_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -187,7 +166,7 @@ class MultilingualTransformerFseq(Model):
         output_dict["predicted_tokens"] = all_predicted_tokens
         return output_dict
 
-    def _build_encoder_and_decoder(self, args) -> Tuple[TransformerEncoder, TransformerDecoder]:
+    def _build_transformer(self, args) -> TransformerModel:
         """Build a new model instance."""
 
         # make sure all arguments are present in older models
@@ -237,7 +216,20 @@ class MultilingualTransformerFseq(Model):
 
         encoder = TransformerEncoder(args, src_dict, encoder_embed_tokens, left_pad=False)
         decoder = TransformerDecoder(args, tgt_dict, decoder_embed_tokens, left_pad=False)
-        return encoder, decoder
+        return TransformerModel(encoder, decoder)
+
+    @staticmethod
+    def _prepare_encoder_input(source_tokens: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        padding_mask = util.get_text_field_mask(source_tokens)
+        source_tokens = source_tokens["tokens"]
+        source_tokens, padding_mask = remove_eos_from_the_beginning(source_tokens, padding_mask)
+        lengths = util.get_lengths_from_binary_sequence_mask(padding_mask)
+        return {"src_tokens": source_tokens, "src_lengths": lengths}
+
+    @staticmethod
+    def _prepare_decoder_input(target_tokens: Dict[str, torch.Tensor], encoder_output: Dict[str, torch.Tensor]):
+        target_tokens = target_tokens["tokens"]
+        return {"prev_output_tokens": target_tokens, "encoder_out": encoder_output}
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
@@ -247,29 +239,46 @@ class MultilingualTransformerFseq(Model):
         return all_metrics
 
 
+def remove_eos_from_the_beginning(tensor: torch.Tensor, mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Our source sentences does not need EOS at the beginning while dataset reader appends it.
+    """
+
+    return tensor.clone()[:, 1:], mask.clone()[:, 1:]
+
+
+def move_eos_to_the_end(tensor: torch.Tensor, mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Assumes EOS is in the beginning. Useful to turn sequence that is an input for teacher forcing (EOS, w1, w2)
+    to sequence that is suitable to compute loss (w1, w2, EOS). Takes padding into account.
+    """
+    batch_size = tensor.size(0)
+    sequence_lengths = mask.sum(dim=1).detach().cpu().numpy()
+    eos_id = tensor[0][0]  # eos is the first symbol in all sequences
+    tensor_without_eos, _ = remove_eos_from_the_beginning(tensor, mask)
+    tensor_with_eos_at_the_end = torch.cat([tensor_without_eos, torch.zeros(batch_size, 1).long()], dim=1)
+    for i, j in zip(range(batch_size), sequence_lengths):
+        tensor_with_eos_at_the_end[i, j - 1] = eos_id
+
+    return tensor_with_eos_at_the_end
+
+
 def move_eos_to_the_beginning(tensor: torch.Tensor,
                               mask: torch.Tensor) -> torch.Tensor:
     """
     Mask stays the same
     """
     sequence_lengths = mask.sum(dim=1).detach().cpu().numpy()
-    tensor_shape = list(tensor.data.shape)
-    new_shape = list(tensor_shape)
 
-    contextualized = False
-    if len(new_shape) == 3:
-        contextualized = True
-
-    tensor_with_eos_at_the_beginning = tensor.new_zeros(*new_shape)
-    if contextualized:
-        for i, j in enumerate(sequence_lengths):
-            if j > 1:
-                tensor_with_eos_at_the_beginning[i, 0, :] = tensor[i, (j - 1), :]
-                tensor_with_eos_at_the_beginning[i, 1:j, :] = tensor[i, :(j - 1), :]
-    else:
-        for i, j in enumerate(sequence_lengths):
-            if j > 1:
-                tensor_with_eos_at_the_beginning[i, 0] = tensor[i, (j - 1)]
-                tensor_with_eos_at_the_beginning[i, 1:j] = tensor[i, :(j - 1)]
+    tensor_with_eos_at_the_beginning = tensor.zeros_like(tensor)
+    for i, j in enumerate(sequence_lengths):
+        if j > 1:
+            tensor_with_eos_at_the_beginning[i, 0] = tensor[i, (j - 1)]
+            tensor_with_eos_at_the_beginning[i, 1:j] = tensor[i, :(j - 1)]
 
     return tensor_with_eos_at_the_beginning
+
+
+def add_eos_to_the_beginning(tensor: torch.Tensor, eos_index: int):
+    eos_column = tensor.new_full((tensor.size(0), 1), eos_index)
+    return torch.cat([eos_column, torch.tensor], dim=1)
