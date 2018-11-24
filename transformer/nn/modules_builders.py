@@ -27,7 +27,7 @@ def build_transformer_encoder_and_decoder(args, src_dict, tgt_dict) -> Tuple[Tra
     """Build a new model instance."""
 
     # make sure all arguments are present in older models
-    base_architecture(args)
+    base_architecture(args)  # does not override any arguments
 
     if not hasattr(args, 'max_source_positions'):
         args.max_source_positions = 1024

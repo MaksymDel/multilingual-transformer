@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Any
 import torch
 from allennlp.data import Vocabulary
 from allennlp.nn import util
@@ -121,7 +121,8 @@ def move_eos_to_the_end(tensor: torch.Tensor, mask: torch.Tensor) -> Tuple[torch
     sequence_lengths = mask.sum(dim=1).detach().cpu().numpy()
     eos_id = tensor[0][0]  # eos is the first symbol in all sequences
     tensor_without_eos, _ = remove_eos_from_the_beginning(tensor, mask)
-    tensor_with_eos_at_the_end = torch.cat([tensor_without_eos, torch.zeros(batch_size, 1).long()], dim=1)
+    padding_column = tensor_without_eos.new_zeros(batch_size, 1).long()
+    tensor_with_eos_at_the_end = torch.cat([tensor_without_eos, padding_column], dim=1)
     for i, j in zip(range(batch_size), sequence_lengths):
         tensor_with_eos_at_the_end[i, j - 1] = eos_id
 

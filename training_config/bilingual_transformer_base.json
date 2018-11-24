@@ -9,11 +9,11 @@
     "type": "bilingual",
     "lazy": false
   },
-  "train_data_path": "fixtures/data/seq2seq_copy.tsv",
-  "validation_data_path": "fixtures/data/seq2seq_copy.tsv",
+  "train_data_path": "../data/iwslt14.tokenized.de-en/train.de-en",
+  "validation_data_path": "../data/iwslt14.tokenized.de-en/valid.de-en",
   "model": {
     "type": "bilingual_transformer",
-    "label_smoothing": 0.1,
+    "label_smoothing": 0.0,
     "architecture": "transformer_iwslt_de_en",
 
     "overrides": {
@@ -33,24 +33,24 @@
 
       "share_decoder_input_output_embed": false,
       "share_all_embeddings": false,
-      "dropout": 0.3
+      "dropout": 0.1
     }
   },
   "iterator": {
     "type": "bucket",
-    "batch_size" : 4,
+    "batch_size" : 64,
     "sorting_keys": [["tokens_A", "num_tokens"]],
     "biggest_batch_first": true
   },
   "trainer": {
-    "cuda_device": -1,
-    "num_epochs": 2,
+    "cuda_device": 0,
+    "num_epochs": 100,
     "patience": 10,
     "num_serialized_models_to_keep": 5,
     "optimizer": {
       "type": "adam",
-      "lr": 0.0005,
-      "betas": [0.9, 0.98]
+      "lr": 0.0001,
+      "betas": [0.9, 0.9]
     }
   }
 }

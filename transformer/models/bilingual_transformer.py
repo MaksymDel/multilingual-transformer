@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Any
 
 import numpy
 from overrides import overrides
@@ -41,7 +41,9 @@ class BilingualTransformer(Model):
 
     def __init__(self,
                  vocab: Vocabulary,
-                 architecture: str = "transformer_iwslt_de_en",
+                 label_smoothing: float = None,
+                 overrides: Dict[str, Any] = None,
+                 architecture: str = None,
                  use_bleu: bool = True) -> None:
         super(BilingualTransformer, self).__init__(vocab)
         self._source_namespace = "vocab_A"
@@ -60,22 +62,29 @@ class BilingualTransformer(Model):
                                     pad=vocab._padding_token,
                                     unk=vocab._oov_token)
 
-        if architecture == "transformer_iwslt_de_en":
-            apply_architecture = transformer_iwslt_de_en
-        elif architecture == "transformer_wmt_en_de":
-            apply_architecture = transformer_wmt_en_de
+        if architecture is not None:
+            if architecture == "transformer_iwslt_de_en":
+                apply_architecture = transformer_iwslt_de_en
+            elif architecture == "transformer_wmt_en_de":
+                apply_architecture = transformer_wmt_en_de
+            else:
+                raise ConfigurationError("Typo in architecture name")
         else:
-            raise ConfigurationError("Typo in architecture name")
+            apply_architecture = lambda x: x
 
+        # create args in format fairseq expects
         args = Args()
-        apply_architecture(args)
-
+        apply_architecture(args)  # set some args based on predefined architecture
+        if overrides is not None:  # override some args
+            for arg_name, arg in overrides.as_dict().items():
+                setattr(args, arg_name, arg)
         # build encoder and decoder
         self._encoder, self._decoder = build_transformer_encoder_and_decoder(args, self._src_dict, self._tgt_dict)
 
         # build translator that takes source tokens directly
         self._translator_A2B = BeamSearchSequenceGenerator(self._encoder, self._decoder, self._tgt_dict)
 
+        self._label_smoothing = label_smoothing
         if use_bleu:
             pad_index = self.vocab.get_token_index(self.vocab._padding_token,
                                                    self._target_namespace)  # pylint: disable=protected-access
@@ -121,7 +130,8 @@ class BilingualTransformer(Model):
             relevant_targets = move_eos_to_the_end(tokens_B["tokens"], target_mask).contiguous()
 
             # Compute loss
-            loss = util.sequence_cross_entropy_with_logits(logits, relevant_targets, target_mask)
+            loss = util.sequence_cross_entropy_with_logits(logits, relevant_targets, target_mask,
+                                                           label_smoothing=self._label_smoothing)
 
             # Update metrics
             predictions = logits.argmax(2)
