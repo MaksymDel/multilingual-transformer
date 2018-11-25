@@ -19,7 +19,7 @@ class MultilingualTransformerModelTest(ModelTestCase):
     def setUp(self):
         super().setUp()
         self.set_up_model("fixtures/config/multilingual_transformer.json",
-                          "fixtures/data/seq2seq_copy.tsv")
+                          "fixtures/data/seq2seq_copy_mul.tsv")
 
     def test_model_can_train_save_and_load(self):
         self.model.train()
@@ -29,16 +29,16 @@ class MultilingualTransformerModelTest(ModelTestCase):
         self.model.eval()
 
         training_tensors = self.dataset.as_tensor_dict()
-        source_tensors = training_tensors["tokens_A"]
+        source_tensors = training_tensors["source_tokens"]
         out = self.model(source_tensors)
         out1 = self.model(source_tensors)
         assert len(out["predictions"]) == 3
 
         self.set_up_model("fixtures/config/multilingual_transformer.json",
-                          "fixtures/data/seq2seq_nolabels.txt")
+                          "fixtures/data/seq2seq_nolabels_mul.txt")
         self.model.eval()
 
         tensors = self.dataset.as_tensor_dict()
-        source_tensors_test = tensors["tokens_A"]
+        source_tensors_test = tensors["target_tokens"]
 
         out2 = self.model(source_tensors_test)

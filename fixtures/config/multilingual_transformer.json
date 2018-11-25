@@ -7,10 +7,11 @@
   },
   "dataset_reader": {
     "type": "multilingual",
+    "language_tags": "EN-ET-FR-UA",
     "lazy": false
   },
-  "train_data_path": "fixtures/data/seq2seq_copy.tsv",
-  "validation_data_path": "fixtures/data/seq2seq_copy.tsv",
+  "train_data_path": "fixtures/data/seq2seq_copy_mul.tsv",
+  "validation_data_path": "fixtures/data/seq2seq_copy_mul.tsv",
   "model": {
     "type": "multilingual_transformer",
     "architecture": "transformer_iwslt_de_en"
@@ -18,7 +19,7 @@
   "iterator": {
     "type": "bucket",
     "batch_size" : 4,
-    "sorting_keys": [["tokens_A", "num_tokens"]],
+    "sorting_keys": [["source_tokens", "num_tokens"]],
     "biggest_batch_first": true
   },
   "trainer": {

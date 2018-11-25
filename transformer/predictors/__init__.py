@@ -1,1 +1,2 @@
 from transformer.predictors.seq2seq_predictor import Seq2SeqPredictor
+from transformer.predictors.multilingual_predictor import Seq2SeqMultilingualPredictor
