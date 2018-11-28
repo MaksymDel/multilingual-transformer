@@ -1,0 +1,16 @@
+{
+  "vocabulary": {
+    "max_vocab_size": {
+      "source_tokens": 14000,
+      "target_tokens": 14000
+    }
+  },
+  "dataset_reader": {
+    "type": "make_vocab",
+    "language_pairs": "EN-ET, EN-RU, UA-RU",
+    "lazy": false
+  },
+
+  "train_data_path": "fixtures/data/en-et.tsv, fixtures/data/en-ru.tsv, fixtures/data/ua-ru.tsv",
+  "validation_data_path": "fixtures/data/en-et.tsv, fixtures/data/en-ru.tsv, fixtures/data/ua-ru.tsv"
+}

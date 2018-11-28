@@ -1,2 +1,2 @@
 from transformer.models.bilingual_transformer import BilingualTransformer
-from transformer.models.multilingaul_transformer import MultilingualTransformer
+from transformer.models.separate_encoder_decoder import SeparateEncoderDecoder

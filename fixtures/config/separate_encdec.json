@@ -1,0 +1,58 @@
+{
+  "vocabulary": {
+    "directory_path": "fixtures/vocab/vocabulary",
+    "extend": false
+  },
+  "lazy_dataset_reader": false,
+  "language_pairs": "EN-ET, EN-RU, UA-RU",
+  "train_data_paths": "fixtures/data/en-et.tsv, fixtures/data/en-ru.tsv, fixtures/data/ua-ru.tsv",
+  "validation_data_paths": "fixtures/data/en-et.tsv, fixtures/data/en-ru.tsv, fixtures/data/ua-ru.tsv",
+
+  "model": {
+    "type": "separate_encdec",
+    "label_smoothing": 0.1,
+    "identity_loss": false,
+
+    "bleu_metric": false,
+    "loss_metric": true,
+
+    "architecture": "transformer_iwslt_de_en",
+    "overrides": {
+      "max_source_positions": 1024,
+      "encoder_embed_dim": 512,
+      "encoder_ffn_embed_dim": 1024,
+      "encoder_attention_heads": 4,
+      "encoder_layers": 6,
+      "encoder_normalize_before": false,
+
+      "max_target_positions": 1024,
+      "decoder_embed_dim": 512,
+      "decoder_ffn_embed_dim": 1024,
+      "decoder_attention_heads": 4,
+      "decoder_layers": 6,
+      "decoder_normalize_before": false,
+
+      "share_decoder_input_output_embed": false,
+      "share_all_embeddings": false,
+      "dropout": 0.3
+    }
+  },
+  "iterator": {
+    "type": "bucket",
+    "batch_size" : 2,
+    "sorting_keys": [["sentence_a", "num_tokens"]],
+    "biggest_batch_first": true
+  },
+  "trainer": {
+    "cuda_device": -1,
+    "num_epochs": 2,
+    "patience": 2,
+    "num_serialized_models_to_keep": 1,
+    "shuffle": false,
+    "optimizer": {
+      "type": "adam",
+      "lr": 0.0001,
+      "betas": [0.9, 0.98]
+    }
+  }
+}

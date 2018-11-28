@@ -1,2 +1,3 @@
 from transformer.data.dataset_readers.bilingual_dataset_reader import BilingualDatasetReader
-from transformer.data.dataset_readers.multilingual_dataset_reader import MultilingualDatasetReader
+from transformer.data.dataset_readers.make_vocab_dataset_reader import MakeVocabDatasetReader
+from transformer.data.dataset_readers.two_way_dataset_reader import TwoWayDatasetReader
