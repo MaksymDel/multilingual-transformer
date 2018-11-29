@@ -8,16 +8,15 @@ from allennlp.data.dataset import Batch
 
 from allennlp.data.instance import Instance
 from allennlp.data.vocabulary import Vocabulary
-from allennlp.data.iterators import DataIterator, BasicIterator
-from allennlp.common.params import Params
-from allennlp.common.checks import ConfigurationError
+from allennlp.data.iterators import DataIterator
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 TensorDict = Dict[str, Union[torch.Tensor, Dict[str, torch.Tensor]]]  # pylint: disable=invalid-name
 
 
-class MultipleIterator(DataIterator):
+@DataIterator.register("multi")
+class MultiIterator(DataIterator):
     """
     Takes as an input an ordered list of iterators that will in turn iterate over an ordered list of datasets.
     I.e. iterator1 will iterate over dataset1, iterator2 over dataset2, etc.
@@ -32,8 +31,8 @@ class MultipleIterator(DataIterator):
 
     ""
 
-    def __init__(self, base_iterator: DataIterator, num_datasets: int) -> None:
-        self._iterators = [copy.copy(base_iterator) for _ in range(num_datasets)]
+    def __init__(self, iterator_base: DataIterator, num_datasets: int) -> None:
+        self._iterators = [copy.copy(iterator_base) for _ in range(num_datasets)]
 
         if self._iterators[0]._instances_per_epoch is None:
             self._synced = False

@@ -1,6 +1,11 @@
 ```python 
 
-python -m transformer.run train fixtures/config/bilingual_transformer.json -s fixtures/serialization/toy -f
+python -m transformer.run train-multilingual fixtures/config/separate_encdec.json -s fixtures/serialization/separate_encdec -f
+python -m transformer.run predict fixtures/serialization/separate_encdec/model.tar.gz fixtures/data/seq2seq_nolabels.txt --use-dataset-reader --predictor seq2seq_mulilingual -o '{"dataset_reader":{"language_pair": "EN-ET"}}'
+
+
+
+python -m transformer.run train-multilingual training_config/separate_encdec.json -s ../output/separate_encdec-de-en -f
 
 ```
 

@@ -52,18 +52,20 @@ class TwoWayDatasetReader(DatasetReader):
             logger.info("Reading %s sentence pairs from following file: %s", self._language_pair, file_path)
 
             for line_num, sentence_pair in enumerate(data_file):
-                    sentence_a, sentence_b = sentence_pair.strip('\n').split('\t')
+                sentence_pair = sentence_pair.strip('\n').split('\t')
+                if len(sentence_pair) == 2:
+                    sentence_a, sentence_b = sentence_pair
                     yield self.text_to_instance(sentence_a, sentence_b)
+                elif len(sentence_pair) == 1:
+                    sentence_a = sentence_pair[0]
+                    yield self.text_to_instance(sentence_a)
 
     @overrides
-    def text_to_instance(self, sentence_a: str, sentence_b: str) -> Instance:
+    def text_to_instance(self, sentence_a: str, sentence_b: str = None) -> Instance:
         tokenized_a = self._tokenizer.tokenize(sentence_a)
-        tokenized_b = self._tokenizer.tokenize(sentence_b)
         tokenized_a.insert(0, Token(END_SYMBOL))
-        tokenized_b.insert(0, Token(END_SYMBOL))
 
         sentence_a_field = TextField(tokenized_a, self._token_indexers[self._language_a])
-        sentence_b_field = TextField(tokenized_b, self._token_indexers[self._language_b])
 
         language_a_field = LabelField(self._language_a, label_namespace=self._tags_namespace)
         language_b_field = LabelField(self._language_b, label_namespace=self._tags_namespace)
@@ -71,13 +73,20 @@ class TwoWayDatasetReader(DatasetReader):
         lanugage_a_metadata = MetadataField(self._language_a)
         lanugage_b_metadata = MetadataField(self._language_b)
 
-        return Instance({"sentence_a": sentence_a_field,
-                         "sentence_b": sentence_b_field,
-                         "language_a_indexed": language_a_field,
-                         "language_b_indexed": language_b_field,
-                         "language_a": lanugage_a_metadata,
-                         "language_b": lanugage_b_metadata,
-                         })
+        fields_dict = {"sentence_a": sentence_a_field,
+                       "language_a_indexed": language_a_field,
+                       "language_b_indexed": language_b_field,
+                       "language_a": lanugage_a_metadata,
+                       "language_b": lanugage_b_metadata,
+                       }
+
+        if sentence_b is not None:
+            tokenized_b = self._tokenizer.tokenize(sentence_b)
+            tokenized_b.insert(0, Token(END_SYMBOL))
+            sentence_b_field = TextField(tokenized_b, self._token_indexers[self._language_b])
+            fields_dict.update({"sentence_b": sentence_b_field})
+
+        return Instance(fields_dict)
 
     @staticmethod
     def get_num_instances(file_path):

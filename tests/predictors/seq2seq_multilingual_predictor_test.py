@@ -10,11 +10,11 @@ from allennlp.data.dataset_readers import DatasetReader
 
 class TestSeq2SeqPredictor(AllenNlpTestCase):
     def test_predict_no_labels(self):
-        ar = load_archive("fixtures/serialization/bilingual_transformer/model.tar.gz")
+        ar = load_archive("fixtures/serialization/separate_encdec/model.tar.gz")
         mdl = ar.model
         mdl.eval()
         reader_params = ar.config.pop("dataset_reader")
-        reader_params.__setitem__("inference_language_direction", "EN->UA")
+        reader_params.__setitem__("language_pair", "EN-ET")
         reader = DatasetReader.from_params(reader_params)
         instances = reader.read("fixtures/data/seq2seq_nolabels.txt")
         res = mdl.forward_on_instances(instances)

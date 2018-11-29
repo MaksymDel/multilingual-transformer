@@ -41,6 +41,7 @@ class SeparateEncoderDecoder(Model):
 
     def __init__(self,
                  vocab: Vocabulary,
+                 language_pairs: str,
                  overrides: Params = None,
                  label_smoothing: float = None,
                  architecture: str = "transformer_iwslt_de_en",
@@ -54,6 +55,7 @@ class SeparateEncoderDecoder(Model):
         self._identity_loss = identity_loss
         self._label_smoothing = label_smoothing
 
+        self._language_pairs = language_pairs
         language_tags = vocab.get_token_to_index_vocabulary(namespace="language_tags").keys()
 
         # init dictionaries that fairseq components expect
@@ -108,10 +110,20 @@ class SeparateEncoderDecoder(Model):
                                                                                   self._decoders[l_tgt],
                                                                                   self._fseq_dictionaries[l_tgt])
 
+        train_lang_directions = []
+        for lang_pair in self._language_pairs.split(", "):
+            l1, l2 = lang_pair.split("-")
+            train_lang_directions.append((l1, l2))
+            train_lang_directions.append((l2, l1))
+
+        # `all_lang_directions` contains all directions we have parallel data for + zero shot directions
+        # `train_lang_directions` contains only directions we have parallel data for
         # init bleu metrics for all directions
+        language_directions_for_metrics = train_lang_directions
+
         if bleu_metric:
             self._all_bleu_metrics = {}
-            for l_src, l_tgt in all_lang_directions:
+            for l_src, l_tgt in language_directions_for_metrics:
                 pad_index = self.vocab.get_token_index(self.vocab._padding_token,
                                                        "vocab_" + l_tgt)  # pylint: disable=protected-access
                 end_index = self.vocab.get_token_index(END_SYMBOL,
@@ -122,7 +134,7 @@ class SeparateEncoderDecoder(Model):
 
         if loss_metric:
             self._all_loss_metrics = {}
-            for l_src, l_tgt in all_lang_directions:
+            for l_src, l_tgt in language_directions_for_metrics:
                 self._all_loss_metrics[l_src + "->" + l_tgt] = Average()
         else:
             self._all_loss_metrics = None
@@ -148,7 +160,6 @@ class SeparateEncoderDecoder(Model):
         language_a, language_b = language_a[0], language_b[0]  # we always have the same language inside one batch
         inference = sentence_b is None
         validation = sentence_b is not None and not self.training
-
         if self.training or validation:
             sentence_pair_loss = self._forward_on_sentence_pair(sentence_a, language_a, sentence_b, language_b)
             return {"loss": sentence_pair_loss}
@@ -175,11 +186,11 @@ class SeparateEncoderDecoder(Model):
         return loss
 
     def _forward_seq2seq(self, language_direction, source_tokens, target_tokens=None):
-        if target_tokens is None:  # if called for inference
-            return {"predictions": self._translators[language_direction](source_tokens)}
-
         source_lang_tag, target_lang_tag = language_direction.split("->")
         self._target_namespace = "vocab_" + target_lang_tag  # target namespace is different for each instance
+
+        if target_tokens is None:  # if called for inference
+            return {"predictions": self._translators[language_direction].generate(source_tokens)}
 
         # Shape: src_len x batch_size x num_features
         encoder_output = run_encoder(encoder=self._encoders[source_lang_tag], source_tokens=source_tokens)

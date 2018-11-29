@@ -1,1 +1,1 @@
-from transformer.data.iterators.multiple_iterator import MultipleIterator
+from transformer.data.iterators.multi_iterator import MultiIterator

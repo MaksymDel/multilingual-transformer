@@ -58,8 +58,6 @@ from allennlp.models.archival import archive_model, CONFIG_NAME
 from allennlp.models.model import Model, _DEFAULT_WEIGHTS
 from allennlp.training.trainer import Trainer
 
-from transformer.data.dataset_readers import TwoWayDatasetReader
-from transformer.data.iterators import MultipleIterator
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -153,16 +151,15 @@ def datasets_from_params(params: Params) -> Dict[str, Iterable[Instance]]:
     language_pairs = params.pop('language_pairs')
     language_pairs = language_pairs.split(", ")
 
-    lazy = params.pop('lazy_dataset_reader', False)
-
     dataset_readers = []
     validation_and_test_dataset_readers = []
+    reader_params: Params = params.pop("dataset_reader")
     for language_pair in language_pairs:
-        reader = TwoWayDatasetReader(lazy=lazy, language_pair=language_pair)
+        reader = DatasetReader.from_params(reader_params.duplicate(), language_pair=language_pair)
         dataset_readers.append(copy.copy(reader))
         validation_and_test_dataset_readers.append(copy.copy(reader))
 
-    # ================ Multiple rain data ===================
+    # ================ Multiple train data ===================
     train_data_paths = params.pop('train_data_paths')
     train_data_paths = train_data_paths.split(", ")
 
@@ -324,16 +321,13 @@ def train_model(params: Params,
     # Initializing the model can have side effect of expanding the vocabulary
     vocab.save_to_files(os.path.join(serialization_dir, "vocabulary"))
 
-
     # ==================== Multiple iterator here =========================
     iterator = DataIterator.from_params(params.pop("iterator"))
 
-    iterator = MultipleIterator(base_iterator=iterator, num_datasets=len(language_pairs))
     iterator.index_with(vocab)
     validation_iterator_params = params.pop("validation_iterator", None)
     if validation_iterator_params:
-        validation_iterator = DataIterator.from_params(validation_iterator_params)
-        validation_iterator = MultipleIterator(base_iterator=validation_iterator, num_datasets=len(language_pairs))
+        validation_iterator = DataIterator.from_params(validation_iterator_params, num_datasets=len(language_pairs))
         validation_iterator.index_with(vocab)
     else:
         validation_iterator = None

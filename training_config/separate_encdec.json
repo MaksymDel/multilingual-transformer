@@ -1,4 +1,4 @@
-local language_pairs = "EN-ET, EN-RU, UA-RU";
+local language_pairs = "DE-EN";
 
 {
 //  "vocabulary": {
@@ -16,16 +16,15 @@ local language_pairs = "EN-ET, EN-RU, UA-RU";
     "lazy": false
   },
   "language_pairs": language_pairs,
-  "train_data_paths": "fixtures/data/en-et.tsv, fixtures/data/en-ru.tsv, fixtures/data/ua-ru.tsv",
-  "validation_data_paths": "fixtures/data/en-et.tsv, fixtures/data/en-ru.tsv, fixtures/data/ua-ru.tsv",
-
+  "train_data_paths": "../data/iwslt14.tokenized.de-en/train.de-en",
+  "validation_data_paths": "../data/iwslt14.tokenized.de-en/valid.de-en",
   "model": {
     "type": "separate_encdec",
     "language_pairs": language_pairs,
     "label_smoothing": 0.1,
     "identity_loss": false,
 
-    "bleu_metric": false,
+    "bleu_metric": true,
     "loss_metric": true,
 
     "architecture": "transformer_iwslt_de_en",
@@ -54,7 +53,7 @@ local language_pairs = "EN-ET, EN-RU, UA-RU";
     "num_datasets": std.length(std.split(language_pairs, ' ')),
     "iterator_base": {
       "type": "bucket",
-      "batch_size": 2,
+      "batch_size": 64,
       "sorting_keys": [
         [
           "sentence_a",
@@ -65,10 +64,10 @@ local language_pairs = "EN-ET, EN-RU, UA-RU";
     }
   },
   "trainer": {
-    "cuda_device": -1,
-    "num_epochs": 2,
-    "patience": 2,
-    "num_serialized_models_to_keep": 1,
+    "cuda_device": 0,
+    "num_epochs": 100,
+    "patience": 10,
+    "num_serialized_models_to_keep": 5,
     "shuffle": false,
     "optimizer": {
       "type": "adam",

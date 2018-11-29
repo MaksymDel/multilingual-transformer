@@ -7,7 +7,7 @@ from allennlp.data.vocabulary import Vocabulary
 from allennlp.tests.data.iterators.basic_iterator_test import IteratorTest
 
 from transformer.data.dataset_readers import TwoWayDatasetReader
-from transformer.data.iterators import MultipleIterator
+from transformer.data.iterators import MultiIterator
 
 
 class TestMultiIterator(IteratorTest):
@@ -51,7 +51,7 @@ class TestMultiIterator(IteratorTest):
         datasets_list = list(self._iterable_datasets.values())
 
         iterator_base = BasicIterator(batch_size=batch_size, instances_per_epoch=instances_per_epoch)
-        multiple_iterator = MultipleIterator(iterator_base, 3)
+        multiple_iterator = MultiIterator(iterator_base, 3)
         multiple_iterator.index_with(self.vocab)
         return multiple_iterator(datasets_list, num_epochs=num_epoch, shuffle=False)
 
