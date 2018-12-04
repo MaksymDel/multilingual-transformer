@@ -53,7 +53,7 @@ local language_pairs = "DE-EN";
     "num_datasets": std.length(std.split(language_pairs, ' ')),
     "iterator_base": {
       "type": "bucket",
-      "batch_size": 64,
+      "batch_size": 32,
       "sorting_keys": [
         [
           "sentence_a",
